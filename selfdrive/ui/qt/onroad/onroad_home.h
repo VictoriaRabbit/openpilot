@@ -16,6 +16,12 @@ private:
   QColor bg = bg_colors[STATUS_DISENGAGED];
   QHBoxLayout* split;
 
+  // ADD THESE THREE LINES:
+  Params params;
+  QPushButton *weight_minus_btn;
+  QPushButton *weight_plus_btn;
+  QLabel *weight_display;
+
 private slots:
   void offroadTransition(bool offroad);
   void updateState(const UIState &s);
