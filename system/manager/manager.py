@@ -39,6 +39,7 @@ def manager_init() -> None:
     ("LanguageSetting", "main_en"),
     ("OpenpilotEnabledToggle", "1"),
     ("LongitudinalPersonality", str(log.LongitudinalPersonality.standard)),
+    ("VehicleWeight", "1500"),  # ADD THIS LINE
   ]
 
   if params.get_bool("RecordFrontLock"):
