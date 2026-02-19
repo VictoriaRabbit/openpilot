@@ -23,6 +23,9 @@
 #include "selfdrive/ui/qt/offroad/developer_panel.h"
 #include "selfdrive/ui/qt/offroad/firehose.h"
 
+// new weight parameter file
+#include "selfdrive/ui/qt/weight_config.h"
+
 TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
   // param, title, desc, icon, restart needed
   std::vector<std::tuple<QString, QString, QString, QString, bool>> toggle_defs{
@@ -139,7 +142,9 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
   title->setStyleSheet("font-size: 50px; font-weight: 600;");
 
   // Description
-  QLabel *desc = new QLabel(tr("Enter total vehicle weight including cargo. Range: 500-5000 kg."), vehicle_weight_widget);
+  QLabel *desc = new QLabel(tr("Trailer weight. Set to 0 when not towing. Range: %1-%2 kg.")
+  .arg(WEIGHT_MIN).arg(WEIGHT_MAX),  // Dynamic range
+  vehicle_weight_widget);
   desc->setStyleSheet("font-size: 40px; color: #A0A0A0;");
   desc->setWordWrap(true);
 
@@ -152,7 +157,7 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
   QHBoxLayout *weight_layout = new QHBoxLayout();
   weight_layout->setSpacing(10);
 
-  weight_minus_btn = new QPushButton("-100");
+  weight_minus_btn = new QPushButton(QString("-%1").arg(WEIGHT_STEP));  // Was "-50"
   weight_minus_btn->setFixedSize(80, 60);
   weight_minus_btn->setStyleSheet(
     "QPushButton { font-size: 28px; font-weight: bold; "
@@ -161,7 +166,7 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
   );
   // Minus button
   QLineEdit *weight_input = new QLineEdit();
-  weight_input->setPlaceholderText("1500");
+  weight_input->setPlaceholderText(QString::number(WEIGHT_DEFAULT));
   weight_input->setFixedWidth(120);
   weight_input->setAlignment(Qt::AlignCenter);
   weight_input->setStyleSheet(
@@ -169,14 +174,15 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
     "border: 2px solid #3498DB; border-radius: 8px;"
   );
    // Load current value from parameter
-  QString current_weight = QString::fromStdString(params.get("VehicleWeight"));
+  // QString current_weight = QString::fromStdString(params.get("VehicleWeight"));
+  QString current_weight = QString::fromStdString(params.get("TrailerWeight"));
   if (!current_weight.isEmpty()) {
     weight_input->setText(current_weight);
   } else {
-    weight_input->setText("1500");
+    weight_input->setText(QString::number(WEIGHT_DEFAULT));  // Was "1500"
   }
 
-  weight_plus_btn = new QPushButton("+100");
+  weight_plus_btn = new QPushButton(QString("+%1").arg(WEIGHT_STEP));   // Was "+50"
   weight_plus_btn->setFixedSize(80, 60);
   weight_plus_btn->setStyleSheet(
     "QPushButton { font-size: 28px; font-weight: bold; "
@@ -189,23 +195,26 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
 
   QObject::connect(weight_minus_btn, &QPushButton::clicked, [=]() {
     int current = weight_input->text().toInt();
-    int new_weight = std::max(500, current - 50);
+    int new_weight = std::max(WEIGHT_MIN, current - WEIGHT_STEP);  // Was 500, 50
     weight_input->setText(QString::number(new_weight));
-    params.put("VehicleWeight", std::to_string(new_weight));
+    // params.put("VehicleWeight", std::to_string(new_weight));
+    params.put("TrailerWeight", std::to_string(new_weight));
   });
 
   QObject::connect(weight_plus_btn, &QPushButton::clicked, [=]() {
     int current = weight_input->text().toInt();
-    int new_weight = std::min(5000, current + 50);
+    int new_weight = std::min(WEIGHT_MAX, current + WEIGHT_STEP);  // Was 5000, 50
     weight_input->setText(QString::number(new_weight));
-    params.put("VehicleWeight", std::to_string(new_weight));
+    // params.put("VehicleWeight", std::to_string(new_weight));
+    params.put("TrailerWeight", std::to_string(new_weight));
   });
 
   QObject::connect(weight_input, &QLineEdit::editingFinished, [=]() {
     bool ok;
     int weight = weight_input->text().toInt(&ok);
-    if (ok && weight >= 500 && weight <= 5000) {
-      params.put("VehicleWeight", std::to_string(weight));
+    if (ok && weight >= WEIGHT_MIN && weight <= WEIGHT_MAX) {  // Was 500, 5000
+      // params.put("VehicleWeight", std::to_string(weight));
+      params.put("TrailerWeight", std::to_string(weight));
       weight_input->setStyleSheet(
         "font-size: 36px; padding: 10px; "
         "border: 2px solid #27AE60; border-radius: 8px;"
