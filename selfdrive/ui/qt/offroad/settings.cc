@@ -152,7 +152,7 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
   QHBoxLayout *weight_layout = new QHBoxLayout();
   weight_layout->setSpacing(10);
 
-  weight_minus_btn = new QPushButton("-50");
+  weight_minus_btn = new QPushButton("-100");
   weight_minus_btn->setFixedSize(80, 60);
   weight_minus_btn->setStyleSheet(
     "QPushButton { font-size: 28px; font-weight: bold; "
@@ -176,7 +176,7 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
     weight_input->setText("1500");
   }
 
-  weight_plus_btn = new QPushButton("+50");
+  weight_plus_btn = new QPushButton("+100");
   weight_plus_btn->setFixedSize(80, 60);
   weight_plus_btn->setStyleSheet(
     "QPushButton { font-size: 28px; font-weight: bold; "
