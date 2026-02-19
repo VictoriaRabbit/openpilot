@@ -3,6 +3,17 @@
 #include "selfdrive/ui/qt/onroad/alerts.h"
 #include "selfdrive/ui/qt/onroad/annotated_camera.h"
 
+#include <QPainter>
+#include <QStackedLayout>   // ADD THIS LINE
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QPushButton>
+#include <QLabel>
+#include <algorithm>
+
+#include "selfdrive/ui/qt/util.h"
+#include "common/params.h"
+
 class OnroadWindow : public QWidget {
   Q_OBJECT
 

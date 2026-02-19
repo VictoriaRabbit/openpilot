@@ -74,6 +74,11 @@ private:
   std::map<std::string, ParamControl*> toggles;
   ButtonParamControl *long_personality_setting;
 
+    // ADD THESE 3 LINES:
+  QPushButton *weight_minus_btn;
+  QPushButton *weight_plus_btn;
+  QLabel *weight_display;
+
   void updateToggles();
 };
 

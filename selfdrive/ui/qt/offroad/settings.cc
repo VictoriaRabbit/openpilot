@@ -6,6 +6,13 @@
 
 #include <QDebug>
 
+// Add these
+#include <algorithm>      // For std::max, std::min
+#include <QLineEdit>      // For weight input field
+#include <QPushButton>    // For +/- buttons (already in settings.h but good practice)
+#include <QLabel>         // For unit label
+#include <QHBoxLayout>    // For horizontal layout
+
 #include "common/watchdog.h"
 #include "common/util.h"
 #include "selfdrive/ui/qt/network/networking.h"
@@ -109,10 +116,131 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
     }
   }
 
+  // ========== ADD VEHICLE WEIGHT INPUT HERE ==========
+
+  // Vehicle Weight Input
+  /*
+  auto vehicle_weight_widget = new AbstractControl(
+    tr("Vehicle Weight"),
+    tr("Enter total vehicle weight including cargo. Range: 500-5000 kg. Used for longitudinal control optimization."),
+    "../assets/offroad/icon_road.png",
+    this
+  ); */
+  // Create widget container
+  QWidget *vehicle_weight_widget = new QWidget(this);
+  vehicle_weight_widget->setObjectName("vehicle_weight_widget");
+
+  // Create main vertical layout
+  QVBoxLayout *vbox = new QVBoxLayout(vehicle_weight_widget);
+  vbox->setContentsMargins(50, 20, 50, 20);
+
+  // Title
+  QLabel *title = new QLabel(tr("Vehicle Weight"), vehicle_weight_widget);
+  title->setStyleSheet("font-size: 50px; font-weight: 600;");
+
+  // Description
+  QLabel *desc = new QLabel(tr("Enter total vehicle weight including cargo. Range: 500-5000 kg."), vehicle_weight_widget);
+  desc->setStyleSheet("font-size: 40px; color: #A0A0A0;");
+  desc->setWordWrap(true);
+
+  // Add title and description to layout
+  vbox->addWidget(title);
+  vbox->addWidget(desc);
+  vbox->addSpacing(20);
+
+   // Create horizontal layout for controls
+  QHBoxLayout *weight_layout = new QHBoxLayout();
+  weight_layout->setSpacing(10);
+
+  weight_minus_btn = new QPushButton("-50");
+  weight_minus_btn->setFixedSize(80, 60);
+  weight_minus_btn->setStyleSheet(
+    "QPushButton { font-size: 28px; font-weight: bold; "
+    "background-color: #E74C3C; color: white; border-radius: 8px; }"
+    "QPushButton:pressed { background-color: #C0392B; }"
+  );
+  // Minus button
+  QLineEdit *weight_input = new QLineEdit();
+  weight_input->setPlaceholderText("1500");
+  weight_input->setFixedWidth(120);
+  weight_input->setAlignment(Qt::AlignCenter);
+  weight_input->setStyleSheet(
+    "font-size: 36px; padding: 10px; "
+    "border: 2px solid #3498DB; border-radius: 8px;"
+  );
+   // Load current value from parameter
+  QString current_weight = QString::fromStdString(params.get("VehicleWeight"));
+  if (!current_weight.isEmpty()) {
+    weight_input->setText(current_weight);
+  } else {
+    weight_input->setText("1500");
+  }
+
+  weight_plus_btn = new QPushButton("+50");
+  weight_plus_btn->setFixedSize(80, 60);
+  weight_plus_btn->setStyleSheet(
+    "QPushButton { font-size: 28px; font-weight: bold; "
+    "background-color: #27AE60; color: white; border-radius: 8px; }"
+    "QPushButton:pressed { background-color: #229954; }"
+  );
+
+  QLabel *unit_label = new QLabel("kg");
+  unit_label->setStyleSheet("font-size: 28px; color: #7F8C8D;");
+
+  QObject::connect(weight_minus_btn, &QPushButton::clicked, [=]() {
+    int current = weight_input->text().toInt();
+    int new_weight = std::max(500, current - 50);
+    weight_input->setText(QString::number(new_weight));
+    params.put("VehicleWeight", std::to_string(new_weight));
+  });
+
+  QObject::connect(weight_plus_btn, &QPushButton::clicked, [=]() {
+    int current = weight_input->text().toInt();
+    int new_weight = std::min(5000, current + 50);
+    weight_input->setText(QString::number(new_weight));
+    params.put("VehicleWeight", std::to_string(new_weight));
+  });
+
+  QObject::connect(weight_input, &QLineEdit::editingFinished, [=]() {
+    bool ok;
+    int weight = weight_input->text().toInt(&ok);
+    if (ok && weight >= 500 && weight <= 5000) {
+      params.put("VehicleWeight", std::to_string(weight));
+      weight_input->setStyleSheet(
+        "font-size: 36px; padding: 10px; "
+        "border: 2px solid #27AE60; border-radius: 8px;"
+      );
+    } else {
+      weight_input->setStyleSheet(
+        "font-size: 36px; padding: 10px; "
+        "border: 2px solid #E74C3C; border-radius: 8px;"
+      );
+    }
+  });
+
+  weight_layout->addWidget(weight_minus_btn);
+  weight_layout->addWidget(weight_input);
+  weight_layout->addWidget(unit_label);
+  weight_layout->addWidget(weight_plus_btn);
+  weight_layout->addStretch();
+
+  vbox->addLayout(weight_layout);
+
+  QFrame *line = new QFrame(vehicle_weight_widget);
+  line->setFrameShape(QFrame::HLine);
+  line->setStyleSheet("color: #404040;");
+  vbox->addWidget(line);
+
+  addItem(vehicle_weight_widget);
+
   // Toggles with confirmation dialogs
+
+  // ========== END VEHICLE WEIGHT INPUT ==========
+
+  // Toggles with confirmation dialogs (line 112-114 in original)
   toggles["ExperimentalMode"]->setActiveIcon("../assets/icons/experimental.svg");
   toggles["ExperimentalMode"]->setConfirmation(true, true);
-}
+}  // End of constructor
 
 void TogglesPanel::updateState(const UIState &s) {
   const SubMaster &sm = *(s.sm);

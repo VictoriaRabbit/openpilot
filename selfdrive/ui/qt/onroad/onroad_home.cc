@@ -1,8 +1,10 @@
 #include "selfdrive/ui/qt/onroad/onroad_home.h"
 
-#include <QPainter>
-#include <QStackedLayout>
-#include <algorithm>    // ADD THIS for std::max, std::min
+#include <QPushButton>
+#include <QLabel>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <algorithm>
 
 #include "selfdrive/ui/qt/util.h"
 
