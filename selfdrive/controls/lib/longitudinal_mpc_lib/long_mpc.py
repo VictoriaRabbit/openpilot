@@ -10,6 +10,11 @@ from openpilot.common.swaglog import cloudlog
 from openpilot.selfdrive.modeld.constants import index_function
 from openpilot.selfdrive.controls.radard import _LEAD_ACCEL_TAU
 
+from openpilot.common.params import Params
+from cereal import car
+import cereal.messaging as messaging
+import time
+
 if __name__ == '__main__':  # generating code
   from openpilot.third_party.acados.acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
 else:
@@ -82,13 +87,14 @@ def get_T_FOLLOW(personality=log.LongitudinalPersonality.standard):
 def get_stopped_equivalence_factor(v_lead):
   return (v_lead**2) / (2 * COMFORT_BRAKE)
 
-def get_safe_obstacle_distance(v_ego, t_follow):
-  return (v_ego**2) / (2 * COMFORT_BRAKE) + t_follow * v_ego + STOP_DISTANCE
+def get_safe_obstacle_distance(v_ego, t_follow, mass_ratio = 1):
 
-def desired_follow_distance(v_ego, v_lead, t_follow=None):
+  return (v_ego**2) / (2 * COMFORT_BRAKE)*mass_ratio + t_follow * v_ego + STOP_DISTANCE
+
+def desired_follow_distance(v_ego, v_lead, t_follow=None, mass_ratio = 1):
   if t_follow is None:
     t_follow = get_T_FOLLOW()
-  return get_safe_obstacle_distance(v_ego, t_follow) - get_stopped_equivalence_factor(v_lead)
+  return get_safe_obstacle_distance(v_ego, t_follow, mass_ratio) - get_stopped_equivalence_factor(v_lead)
 
 
 def gen_long_model():
@@ -223,11 +229,22 @@ def gen_long_ocp():
 
 class LongitudinalMpc:
   def __init__(self, mode='acc', dt=DT_MDL):
+    # self.CP = CP
     self.mode = mode
     self.dt = dt
     self.solver = AcadosOcpSolverCython(MODEL_NAME, ACADOS_SOLVER_TYPE, N)
     self.reset()
     self.source = SOURCES[2]
+
+    # added by GWU 2026/02/24
+    self.veh_params = Params()
+    if self.veh_params.get("TrailerWeight") is None:
+      self.veh_params.put("TrailerWeight", "0")
+    self.CP = messaging.log_from_bytes(self.veh_params.get("CarParams", block=True), car.CarParams)
+    self.trailer_weight = float(self.veh_params.get("TrailerWeight", encoding = 'utf8'))
+    self.mass_ratio = min(3, max(1, (self.CP.mass + self.trailer_weight) / self.CP.mass))
+    self.param_frame = 0 # count update interval
+    self.last_update_time = time.monotonic() # temp time
 
   def reset(self):
     # self.solver = AcadosOcpSolverCython(MODEL_NAME, ACADOS_SOLVER_TYPE, N)
@@ -328,6 +345,14 @@ class LongitudinalMpc:
     return lead_xv
 
   def update(self, radarstate, v_cruise, x, v, a, j, personality=log.LongitudinalPersonality.standard):
+
+    # temp debugging
+    ''' desktop simulation
+    with open("/home/gordonwu/op_v0.9.9/tmp/gwu_debug.log", "a") as f:
+      f.write("[GWU] update() called\n")
+      f.flush()
+    '''
+
     t_follow = get_T_FOLLOW(personality)
     v_ego = self.x0[1]
     self.status = radarstate.leadOne.status or radarstate.leadTwo.status
@@ -344,6 +369,39 @@ class LongitudinalMpc:
     self.params[:,0] = ACCEL_MIN
     self.params[:,1] = ACCEL_MAX
 
+    # periodic refresh, add by GWU 2026/02/24
+
+    self.param_frame += 1
+    if self.param_frame >10:
+      # calculate time step
+      now = time.monotonic()
+      dt_actual = now - self.last_update_time
+      self.last_update_time = now
+      try:
+
+        if self.veh_params.get("TrailerWeight") is None:
+          self.veh_params.put("TrailerWeight", "0")
+        self.trailer_weight = float(self.veh_params.get("TrailerWeight", encoding = 'utf8'))
+        self.mass_ratio = min(3, max(1, (self.CP.mass + self.trailer_weight) / self.CP.mass))
+        #print(f"[GWU] mass_ratio: {self.mass_ratio:.4f} | trailer_weight: {self.trailer_weight:.1f} kg", flush=True)
+        cloudlog.info(f"[GWU] mass_ratio: {self.mass_ratio:.4f} | trailer_weight: {self.trailer_weight:.1f} kg")
+        ''' desktop simulation
+        with open("/home/gordonwu/op_v0.9.9/tmp/gwu_debug.log", "a") as f:
+          f.write(f"[GWU] mass_ratio: {self.mass_ratio:.4f} | trailer_weight: {self.trailer_weight:.1f} kg\n")
+          f.write(f"[GWU] dt_actual: {dt_actual*1000:.1f} ms\n")
+          f.flush()
+        '''
+      except Exception as e:
+        cloudlog.error(f"[GWU] mass_ratio update failed: {type(e).__name__}: {e}")
+        self.mass_ratio = 1.0  # safe fallback
+        self.trailer_weight = 0.0
+        ''' desktop simulation
+        with open("/home/gordonwu/op_v0.9.9/tmp/gwu_debug.log", "a") as f:  # ← file not print
+          f.write(f"[GWU] ERROR: {e}\n")
+          f.flush()
+        '''
+      self.param_frame = 0
+
     # Update in ACC mode or ACC/e2e blend
     if self.mode == 'acc':
       self.params[:,5] = LEAD_DANGER_FACTOR
@@ -356,7 +414,7 @@ class LongitudinalMpc:
       v_cruise_clipped = np.clip(v_cruise * np.ones(N+1),
                                  v_lower,
                                  v_upper)
-      cruise_obstacle = np.cumsum(T_DIFFS * v_cruise_clipped) + get_safe_obstacle_distance(v_cruise_clipped, t_follow)
+      cruise_obstacle = np.cumsum(T_DIFFS * v_cruise_clipped) + get_safe_obstacle_distance(v_cruise_clipped, t_follow, self.mass_ratio)
       x_obstacles = np.column_stack([lead_0_obstacle, lead_1_obstacle, cruise_obstacle])
       self.source = SOURCES[np.argmin(x_obstacles[0])]
 
@@ -402,9 +460,9 @@ class LongitudinalMpc:
     # Check if it got within lead comfort range
     # TODO This should be done cleaner
     if self.mode == 'blended':
-      if any((lead_0_obstacle - get_safe_obstacle_distance(self.x_sol[:,1], t_follow))- self.x_sol[:,0] < 0.0):
+      if any((lead_0_obstacle - get_safe_obstacle_distance(self.x_sol[:,1], t_follow, self.mass_ratio))- self.x_sol[:,0] < 0.0):
         self.source = 'lead0'
-      if any((lead_1_obstacle - get_safe_obstacle_distance(self.x_sol[:,1], t_follow))- self.x_sol[:,0] < 0.0) and \
+      if any((lead_1_obstacle - get_safe_obstacle_distance(self.x_sol[:,1], t_follow, self.mass_ratio))- self.x_sol[:,0] < 0.0) and \
          (lead_1_obstacle[0] - lead_0_obstacle[0]):
         self.source = 'lead1'
 
